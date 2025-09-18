@@ -7,7 +7,29 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Quiz app</h1>
+    <main id="app">
+        <div id="quiz-container">
+        <!-- NEW: Top bar -->
+        <div id="topbar">
+            <div id="progress">
+            <div id="progress-bar" style="width:0%"></div>
+            </div>
+            <div id="timer" aria-live="polite" title="Time left">15</div>
+            <div id="progress-text" aria-label="Question progress">1 / 5</div>
+        </div>
+
+        <h2 id="question">Question will appear here</h2>
+        <ul id="options"></ul>
+        <button id="next-btn">Next</button>
+        </div>
+        <!-- Result container -->
+        <div id="result-container" style="display:none;">
+        <h2 id="score">Your Score: 0</h2>
+        <p id="highscore">High Score: 0</p>
+        <button id="restart-btn">Restart Quiz</button>
+        </div>
+
+    </main>
     <script src="script.js"></script>
 </body>
 </html>
