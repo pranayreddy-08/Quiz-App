@@ -1,65 +1,80 @@
-// ---------- Data ----------
-const quizData = [
-  {
-    question: "What is the full form of HTML?",
-    options: ["Hello to my land","Hey text markup language","Hypertext markup language","Hypertext makeup language"],
-    answer: 2
-  },
-  {
-    question: "What is the full form of CSS?",
-    options: ["Cascading style sheets","Cascading style sheep","Cartoon style sheets","Cascading super sheets"],
-    answer: 0
-  },
-  {
-    question: "What is the full form of JS?",
-    options: ["JavaScript","JavaSuper","JustScript","JordenShoes"],
-    answer: 0
-  },
-  {
-    question: "What is the full form of HTTP?",
-    options: ["Hypertext transfer product","Hypertext test protocol","Hey transfer protocol","Hypertext transfer protocol"],
-    answer: 3
-  },
-  {
-    question: "What is the full form of URL?",
-    options: ["Uniform resource locator","Uniform resource link","United resource locator","United resource link"],
-    answer: 0
-  }
-];
-
-// ---------- Config ----------
-const TIME_PER_QUESTION = 15; // seconds
+// ========== Config ==========
 const HIGHSCORE_KEY = "quiz_highscore";
+const CATEGORY_ID = 18; // Science: Computers (tech)
+const DIFF_TO_TIME = { easy: 20, medium: 15, hard: 10 };
 
-// ---------- State ----------
+// ========== State ==========
+let TIME_PER_QUESTION = 15;
 let currentQuestionIndex = 0;
 let score = 0;
 let hasSelected = false;
 let timerId = null;
 let timeLeft = TIME_PER_QUESTION;
 
-// ---------- DOM ----------
-const questionEl = document.getElementById("question");
-const optionsEl  = document.getElementById("options");
-const nextBtn    = document.getElementById("next-btn");
-const resultBox  = document.getElementById("result-container");
-const scoreEl    = document.getElementById("score");
-const restartBtn = document.getElementById("restart-btn");
-const quizBox    = document.getElementById("quiz-container");
-const timerEl    = document.getElementById("timer");
-const progressBar= document.getElementById("progress-bar");
-const progressTxt= document.getElementById("progress-text");
-const highscoreEl= document.getElementById("highscore");
+// This holds the fetched+normalized set for a single run
+let sessionData = [];
 
-// ---------- Helpers ----------
-function updateProgress() {
-  const total = quizData.length;
-  const current = currentQuestionIndex + 1;
-  const pct = Math.round((currentQuestionIndex / total) * 100);
-  progressBar.style.width = pct + "%";
-  progressTxt.textContent = `${current} / ${total}`;
+// ========== DOM ==========
+const startBox    = document.getElementById("start-container");
+const quizBox     = document.getElementById("quiz-container");
+const resultBox   = document.getElementById("result-container");
+
+const difficultyEl= document.getElementById("difficulty");
+const countEl     = document.getElementById("question-count");
+const startBtn    = document.getElementById("start-btn");
+
+const questionEl  = document.getElementById("question");
+const optionsEl   = document.getElementById("options");
+const nextBtn     = document.getElementById("next-btn");
+const scoreEl     = document.getElementById("score");
+const restartBtn  = document.getElementById("restart-btn");
+
+const timerEl     = document.getElementById("timer");
+const progressBar = document.getElementById("progress-bar");
+const progressTxt = document.getElementById("progress-text");
+const highscoreEl = document.getElementById("highscore");
+
+// ========== Utils ==========
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
+// OpenTDB returns HTML entities. Decode them.
+function decodeHTML(str) {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = str;
+  return txt.value;
+}
+
+// Normalize OpenTDB items to our shape
+function buildSessionFromOTDB(items) {
+  return items.map(item => {
+    const question = decodeHTML(item.question);
+    const correct = decodeHTML(item.correct_answer);
+    const options = item.incorrect_answers.map(decodeHTML).concat(correct);
+    shuffleInPlace(options);
+    const answer = options.findIndex(o => o === correct);
+    return { question, options, answer };
+  });
+}
+
+// Progress/timer helpers
+function updateProgress() {
+  const total = sessionData.length;
+  const pct = Math.round((currentQuestionIndex / total) * 100);
+  progressBar.style.width = pct + "%";
+  progressTxt.textContent = `${currentQuestionIndex + 1} / ${total}`;
+}
+
+function clearTimer() {
+  if (timerId) clearInterval(timerId);
+  timerId = null;
+  timerEl.classList.remove("timer-low");
+}
 function startTimer() {
   clearTimer();
   timeLeft = TIME_PER_QUESTION;
@@ -69,10 +84,7 @@ function startTimer() {
   timerId = setInterval(() => {
     timeLeft--;
     timerEl.textContent = timeLeft;
-
-    // visual urgency
     if (timeLeft <= 5) timerEl.classList.add("timer-low");
-
     if (timeLeft <= 0) {
       clearTimer();
       handleTimeout();
@@ -80,23 +92,10 @@ function startTimer() {
   }, 1000);
 }
 
-function clearTimer() {
-  if (timerId) {
-    clearInterval(timerId);
-    timerId = null;
-  }
-  timerEl.classList.remove("timer-low");
-}
+function lockOptions()  { [...optionsEl.children].forEach(li => li.style.pointerEvents = "none"); }
+function unlockOptions(){ [...optionsEl.children].forEach(li => li.style.pointerEvents = "auto"); }
 
-function lockOptions() {
-  [...optionsEl.children].forEach(opt => (opt.style.pointerEvents = "none"));
-}
-
-function unlockOptions() {
-  [...optionsEl.children].forEach(opt => (opt.style.pointerEvents = "auto"));
-}
-
-// ---------- Render ----------
+// ========== Render ==========
 function loadQuestion(index) {
   hasSelected = false;
   nextBtn.disabled = true;
@@ -104,10 +103,10 @@ function loadQuestion(index) {
 
   updateProgress();
 
-  const q = quizData[index];
+  const q = sessionData[index];
   questionEl.textContent = q.question;
-
   optionsEl.innerHTML = "";
+
   q.options.forEach((optText, i) => {
     const li = document.createElement("li");
     li.textContent = optText;
@@ -123,14 +122,13 @@ function loadQuestion(index) {
   startTimer();
 }
 
-// ---------- Interactions ----------
 function handleSelect(li, index) {
   if (hasSelected) return;
   hasSelected = true;
   clearTimer();
   lockOptions();
 
-  const correctIdx = quizData[currentQuestionIndex].answer;
+  const correctIdx = sessionData[currentQuestionIndex].answer;
   if (index === correctIdx) {
     li.classList.add("correct");
     score++;
@@ -144,21 +142,18 @@ function handleSelect(li, index) {
 }
 
 function handleTimeout() {
-  if (hasSelected) return; // already answered
+  if (hasSelected) return;
   hasSelected = true;
   lockOptions();
-
-  const correctIdx = quizData[currentQuestionIndex].answer;
-  // Show only the correct one if time is up
+  const correctIdx = sessionData[currentQuestionIndex].answer;
   optionsEl.children[correctIdx].classList.add("correct");
-
   nextBtn.disabled = false;
   nextBtn.classList.remove("btn-disabled");
 }
 
 nextBtn.addEventListener("click", () => {
   currentQuestionIndex++;
-  if (currentQuestionIndex < quizData.length) {
+  if (currentQuestionIndex < sessionData.length) {
     loadQuestion(currentQuestionIndex);
   } else {
     showResults();
@@ -169,8 +164,7 @@ function showResults() {
   clearTimer();
   quizBox.style.display = "none";
   resultBox.style.display = "flex";
-
-  const total = quizData.length;
+  const total = sessionData.length;
   scoreEl.textContent = `Your Score: ${score} / ${total}`;
 
   const prevHigh = parseInt(localStorage.getItem(HIGHSCORE_KEY) || "0", 10);
@@ -184,12 +178,77 @@ function showResults() {
 
 restartBtn.addEventListener("click", () => {
   clearTimer();
+  // back to start to pick difficulty/count again
+  startBox.style.display = "flex";
+  quizBox.style.display  = "none";
+  resultBox.style.display= "none";
   currentQuestionIndex = 0;
   score = 0;
-  quizBox.style.display = "flex";
-  resultBox.style.display = "none";
-  loadQuestion(0);
 });
 
-// ---------- boot ----------
-loadQuestion(0);
+// ========== API ==========
+async function fetchOpenTDB({ amount, difficulty, category = CATEGORY_ID }) {
+  const url = `https://opentdb.com/api.php?amount=${amount}&category=${category}&difficulty=${difficulty}&type=multiple`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Network error: ${res.status}`);
+  const data = await res.json();
+
+  // response_code: 0 = success, 1 = not enough questions for your query
+  if (data.response_code === 1) {
+    // Not enough questions at that difficulty/amount
+    // Return whatever we got (maybe 0) and let caller handle
+    return buildSessionFromOTDB(data.results || []);
+  } else if (data.response_code !== 0) {
+    throw new Error(`API error: code ${data.response_code}`);
+  }
+
+  return buildSessionFromOTDB(data.results);
+}
+
+// ========== Start Screen ==========
+startBtn.addEventListener("click", async () => {
+  // 1) Difficulty → per-question time
+  const diff = difficultyEl.value; // easy/medium/hard
+  TIME_PER_QUESTION = DIFF_TO_TIME[diff] ?? 15;
+
+  // 2) Count (cap by a safe upper bound; the Computers category usually supports ~50 per diff)
+  let requested = parseInt(countEl.value || "5", 10);
+  if (isNaN(requested) || requested < 1) requested = 1;
+  if (requested > 20) requested = 20; // OpenTDB max per call
+  countEl.value = requested;
+
+  // UI: disable button + text to indicate loading
+  startBtn.disabled = true;
+  const originalText = startBtn.textContent;
+  startBtn.textContent = "Loading…";
+
+  try {
+    const items = await fetchOpenTDB({ amount: requested, difficulty: diff });
+    if (!items.length) {
+      alert(`Not enough ${diff} questions available in "Computers". Try lowering the count or changing difficulty.`);
+      return;
+    }
+    // If API returned fewer than requested, just use what we got
+    sessionData = items.slice(0, requested);
+
+    // 3) Switch screens and start quiz
+    startBox.style.display = "none";
+    quizBox.style.display  = "flex";
+    resultBox.style.display= "none";
+
+    currentQuestionIndex = 0;
+    score = 0;
+    loadQuestion(0);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to fetch questions. Check your internet and try again.");
+  } finally {
+    startBtn.disabled = false;
+    startBtn.textContent = originalText;
+  }
+});
+
+// Show start screen by default
+startBox.style.display = "flex";
+quizBox.style.display  = "none";
+resultBox.style.display= "none";

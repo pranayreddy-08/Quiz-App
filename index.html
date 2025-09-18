@@ -8,6 +8,25 @@
 </head>
 <body>
     <main id="app">
+        <div id="start-container">
+        <h2>Start Quiz</h2>
+
+        <label for="difficulty">Difficulty</label>
+        <select id="difficulty">
+            <option value="easy" selected>Easy (20s per Question)</option>
+            <option value="medium">Medium (15s per Question)</option>
+            <option value="hard">Hard (10s per Question)</option>
+        </select>
+
+        <label for="question-count">Number of questions</label>
+        <input id="question-count" type="number" min="1" max="20" value="5" />
+
+        <!-- (Optional) Category – for later API use -->
+        <!-- <label for="category">Category</label>
+        <input id="category" type="text" placeholder="e.g., Web Basics" /> -->
+
+        <button id="start-btn">Start</button>
+        </div>
         <div id="quiz-container">
         <!-- NEW: Top bar -->
         <div id="topbar">
